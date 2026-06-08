@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 
 const PHASES = ['preprocess', 'transform', 'build', 'package'];
@@ -14,22 +14,80 @@ export default function DashboardPage() {
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const wsRef = useRef(null);
   const logRef = useRef(null);
 
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3000';
+
+  // 读取 token，若不存在则跳转登录
   useEffect(() => {
-    // TODO: 从 localStorage 读取 token，若不存在则 router.push('/login')
-    //       存在则 setToken(t) 并调用 fetchBalance()
+    const t = localStorage.getItem('token');
+    if (!t) {
+      router.push('/login');
+      return;
+    }
+    setToken(t);
+    fetchBalance(t);
   }, []);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [logs]);
 
-  const fetchBalance = async () => {
-    // TODO: GET ${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/billing/balance
-    //       带 Authorization: Bearer <token>
-    //       成功后 setBalance(data.balance)
+  const fetchBalance = async (t) => {
+    const authToken = t || token;
+    if (!authToken) return;
+    try {
+      const res = await fetch(`${backendUrl}/v1/billing/balance`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBalance(data.balance);
+      }
+    } catch {
+      // 静默失败
+    }
   };
+
+  const connectWs = useCallback((jid) => {
+    setJobId(jid);
+
+    // 关闭旧连接
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    const ws = new WebSocket(`${wsUrl}/ws/job/${jid}?token=${token}`);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        setProgress(msg.progress);
+        setCurrentPhase(msg.phase);
+        setLogs((prev) => [...prev, `[${msg.phase}] ${msg.log}`]);
+
+        if (msg.progress === 100) {
+          setDone(true);
+          fetchBalance(token);
+        }
+      } catch {
+        // 解析失败，忽略
+      }
+    };
+
+    ws.onerror = () => {
+      console.warn('WebSocket error');
+    };
+
+    ws.onclose = (event) => {
+      if (event.code !== 1000) {
+        setError('WebSocket 连接已关闭');
+      }
+    };
+  }, [token, backendUrl, wsUrl]);
 
   const submitJob = async () => {
     setError('');
@@ -38,28 +96,29 @@ export default function DashboardPage() {
     setCurrentPhase('');
     setLogs([]);
     setDone(false);
+    setJobId('');
     try {
-      // TODO: POST ${process.env.NEXT_PUBLIC_BACKEND_URL}/v1/jobs
-      //       带 Authorization: Bearer <token>，body: { payload: {} }
-      //       成功后取 data.jobId，调用 connectWs(data.jobId)
-      //       余额不足（402）显示错误提示
-      setError('尚未实现任务提交逻辑');
+      const res = await fetch(`${backendUrl}/v1/jobs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ payload: {} }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 402) {
+          throw new Error('余额不足，请充值');
+        }
+        throw new Error(data.message || '提交失败');
+      }
+      connectWs(data.jobId);
     } catch (err) {
       setError(err.message || '提交失败');
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const connectWs = (jid) => {
-    setJobId(jid);
-    // TODO: 连接 WebSocket: `${process.env.NEXT_PUBLIC_WS_URL}/ws/job/${jid}?token=${token}`
-    //       收到消息时：
-    //         setProgress(msg.progress)
-    //         setCurrentPhase(msg.phase)
-    //         setLogs(prev => [...prev, `[${msg.phase}] ${msg.log}`])
-    //         若 msg.progress === 100：setDone(true)；fetchBalance()
-    //       连接关闭或错误时：console.warn / setError
   };
 
   return (
