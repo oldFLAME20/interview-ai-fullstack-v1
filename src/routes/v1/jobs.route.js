@@ -20,22 +20,33 @@ const auth = passport.authenticate('jwt', { session: false });
  * 余额不足时 jobService 抛出 ApiError(402)
  * 成功返回 201 { jobId }
  */
-router.post('/', auth, requireTenant, validate(jobValidation.submitJob), catchAsync(async (req, res) => {
-  const result = await jobService.submit(req.tenantId, req.body.payload);
-  res.status(httpStatus.CREATED).send(result);
-}));
+router.post(
+  '/',
+  auth,
+  requireTenant,
+  validate(jobValidation.submitJob),
+  catchAsync(async (req, res) => {
+    const result = await jobService.submit(req.tenantId, req.body.payload);
+    res.status(httpStatus.CREATED).send(result);
+  })
+);
 
 /**
  * GET /v1/jobs/:id
  *
  * 调用 jobService.getJob(req.params.id, req.tenantId)，返回 Job 文档
  */
-router.get('/:id', auth, requireTenant, catchAsync(async (req, res) => {
-  const job = await jobService.getJob(req.params.id, req.tenantId);
-  if (!job) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Job not found');
-  }
-  res.send(job);
-}));
+router.get(
+  '/:id',
+  auth,
+  requireTenant,
+  catchAsync(async (req, res) => {
+    const job = await jobService.getJob(req.params.id, req.tenantId);
+    if (!job) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Job not found');
+    }
+    res.send(job);
+  })
+);
 
 module.exports = router;

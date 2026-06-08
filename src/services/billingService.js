@@ -49,9 +49,7 @@ const getBalance = async (tenantId) => {
  */
 const seed = async (tenants) => {
   const redis = getClient();
-  for (const [tenantId, balance] of Object.entries(tenants)) {
-    await redis.set(`billing:${tenantId}`, balance, 'NX');
-  }
+  await Promise.all(Object.entries(tenants).map(([tenantId, balance]) => redis.set(`billing:${tenantId}`, balance, 'NX')));
 };
 
 module.exports = { deduct, getBalance, seed, COST_PER_JOB };

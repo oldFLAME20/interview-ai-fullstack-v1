@@ -15,9 +15,14 @@ const auth = passport.authenticate('jwt', { session: false });
  * 调用 billingService.getBalance(req.tenantId)
  * 返回 { tenantId: req.tenantId, balance: <number> }
  */
-router.get('/balance', auth, requireTenant, catchAsync(async (req, res) => {
-  const balance = await billingService.getBalance(req.tenantId);
-  res.send({ tenantId: req.tenantId, balance });
-}));
+router.get(
+  '/balance',
+  auth,
+  requireTenant,
+  catchAsync(async (req, res) => {
+    const balance = await billingService.getBalance(req.tenantId);
+    res.send({ tenantId: req.tenantId, balance });
+  })
+);
 
 module.exports = router;

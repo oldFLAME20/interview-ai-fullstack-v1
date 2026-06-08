@@ -27,6 +27,7 @@ const attachWsServer = (server) => {
   wss.on('connection', async (ws, req) => {
     let eventHandler = null;
     let closeTimer = null;
+    let jobId = null;
 
     try {
       // 1. 解析 URL：提取 jobId 和 token
@@ -36,7 +37,7 @@ const attachWsServer = (server) => {
         ws.close(4001, 'Invalid path');
         return;
       }
-      const jobId = urlMatch[1];
+      [, jobId] = urlMatch;
 
       const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
       const token = urlObj.searchParams.get('token');

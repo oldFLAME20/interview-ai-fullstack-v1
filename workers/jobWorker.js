@@ -22,32 +22,28 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * 5. 发生错误时更新 Job.status = 'failed'
  */
 const processJob = async (job) => {
-  const { jobId, tenantId } = job.data;
+  const { jobId } = job.data;
 
-  // 标记为 processing
   await Job.updateOne({ jobId }, { status: 'processing' });
 
   try {
-    for (let i = 0; i < PHASES.length; i++) {
-      const phaseName = PHASES[i];
+    await PHASES.reduce(async (prev, phaseName, index) => {
+      await prev;
 
-      // 1. 模拟处理耗时
       await delay(PHASE_DELAY_MS);
 
-      // 2. 更新 MongoDB phases 数组
       const now = new Date();
       await Job.updateOne(
         { jobId },
         {
           $set: {
-            [`phases.${i}.status`]: 'completed',
-            [`phases.${i}.completedAt`]: now,
+            [`phases.${index}.status`]: 'completed',
+            [`phases.${index}.completedAt`]: now,
           },
         }
       );
 
-      // 3. 通过 eventBus 推送进度
-      const progress = Math.round(((i + 1) / PHASES.length) * 100);
+      const progress = Math.round(((index + 1) / PHASES.length) * 100);
       eventBus.emit(`job:${jobId}`, {
         jobId,
         phase: phaseName,
@@ -55,9 +51,8 @@ const processJob = async (job) => {
         progress,
         log: `Phase ${phaseName} completed`,
       });
-    }
+    }, Promise.resolve());
 
-    // 4. 全部完成
     await Job.updateOne({ jobId }, { status: 'completed', completedAt: new Date() });
     eventBus.emit(`job:${jobId}`, {
       jobId,
@@ -67,7 +62,6 @@ const processJob = async (job) => {
       log: 'Job completed successfully',
     });
   } catch (error) {
-    // 5. 失败处理
     await Job.updateOne({ jobId }, { status: 'failed' });
     eventBus.emit(`job:${jobId}`, {
       jobId,

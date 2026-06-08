@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
@@ -10,7 +10,7 @@ COPY --chown=node:node package.json pnpm-lock.yaml ./
 
 USER node
 
-RUN pnpm install --frozen-lockfile --prod
+RUN HUSKY=0  pnpm install --frozen-lockfile --prod   --ignore-scripts
 
 COPY --chown=node:node . .
 
